@@ -26,7 +26,7 @@ cfg_exp2 = dict(
 cfg_exp3 = dict(
     outfile='_exp3',
     config_path='/workspace/pycharm_project/mmrotate/configs/oriented_rcnn/exp3_oriented_rcnn_r50_prototype_bbox_head_1x_dota_le90.py',
-    checkpoint_path='/workspace/pycharm_project/mmrotate/exp2_work_dir/r50_fpn_ce_dota_ss_1000shot_test/epoch_36.pth',
+    checkpoint_path='/workspace/pycharm_project/mmrotate/inference/r50_fpn_ce_dota_ss_5000shot_test/epoch_36.pth',
 )
 
 '''
@@ -53,7 +53,7 @@ def vis_rotated_result(image_path, config):
 
 
 if __name__ == '__main__':
-    image_path = '/workspace/pycharm_project/mmrotate/demo/P0029.png'
+    image_path = '/workspace/pycharm_project/mmrotate/demo/21406.jpg'
     # vis_rotated_result(image_path, cfg_baseline)
     # vis_rotated_result(image_path, cfg_exp1)
     # vis_rotated_result(image_path, cfg_exp2)
