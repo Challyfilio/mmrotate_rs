@@ -1,12 +1,12 @@
-_base_ = ['./oriented_rcnn_r50_fpn_1x_dota_le90.py']  # pretrain
-# _base_ = ['./exp3_oriented_rcnn_r50_prototype_bbox_head_1x_dota_le90.py']  # few-shot
+# _base_ = ['./oriented_rcnn_r50_fpn_1x_dota_le90.py']  # pretrain
+_base_ = ['./exp3_oriented_rcnn_r50_prototype_bbox_head_1x_dota_le90.py']  # few-shot
 
 pretrained = 'https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth'  # noqa
 
 model = dict(
     backbone=dict(
         _delete_=True,
-        type='SwinTransformer',
+        type='SwinTransformerCNN1',  # SwinTransformerCNN1, SwinTransformerCNN, SwinTransformer
         embed_dims=96,
         depths=[2, 2, 6, 2],
         num_heads=[3, 6, 12, 24],
