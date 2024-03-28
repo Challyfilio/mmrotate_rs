@@ -1,10 +1,10 @@
 {
   "nproc": 10,
   "img_dirs": [
-    "data/DOTA/val/images/"
+    "/workspace/pycharm_project/mmrotate/data/val/images/"
   ],
   "ann_dirs": [
-    "data/DOTA/val/labelTxt/"
+    "/workspace/pycharm_project/mmrotate/data/val/labelTxt-v1.0/"
   ],
   "sizes": [
     1024

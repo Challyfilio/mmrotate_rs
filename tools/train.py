@@ -29,6 +29,8 @@ def parse_args():
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
     parser.add_argument(
+        '--load-from', help='the checkpoint file to load from')
+    parser.add_argument(
         '--auto-resume',
         action='store_true',
         help='resume from the latest checkpoint automatically')
@@ -104,6 +106,8 @@ def main():
                                 osp.splitext(osp.basename(args.config))[0])
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from
+    if args.load_from is not None:
+        cfg.load_from = args.load_from
     cfg.auto_resume = args.auto_resume
     if args.gpu_ids is not None:
         cfg.gpu_ids = args.gpu_ids
@@ -165,7 +169,9 @@ def main():
         train_cfg=cfg.get('train_cfg'),
         test_cfg=cfg.get('test_cfg'))
     model.init_weights()
+    model.cuda()
 
+    print(cfg.data.train)
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
