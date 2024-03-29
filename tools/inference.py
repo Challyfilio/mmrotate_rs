@@ -4,6 +4,7 @@
 """
 # 导入os模块
 import os
+from loguru import logger
 
 cfg_baseline = dict(
     outfile='_baseline',
@@ -41,7 +42,7 @@ def get_file_basename(path: str) -> str:
     return os.path.splitext(os.path.basename(path))[0]
 
 
-def vis_rotated_result(image_path, config):
+def vis_rotated_result(image_path: str, config: dict) -> str:
     outfile_path = ('/workspace/pycharm_project/mmrotate/demo/result_' + get_file_basename(image_path) +
                     config['outfile'] + '.jpg')
     config_path = config['config_path']
@@ -50,6 +51,12 @@ def vis_rotated_result(image_path, config):
     cmd = 'python ../demo/image_demo.py' + ' ' + image_path + ' ' + config_path + ' ' + checkpoint_path + ' --out-file ' + outfile_path
     # 执行命令字符串
     os.system(cmd)
+    if os.path.exists(outfile_path):
+        logger.success('success')
+        return outfile_path
+    else:
+        logger.error('failure')
+        return ''
 
 
 if __name__ == '__main__':
