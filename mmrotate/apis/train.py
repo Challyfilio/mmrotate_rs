@@ -1,7 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 # Copied from mmdet, only modified `get_root_logger`.
 import os
-
+import torch
 from mmcv.runner import (DistSamplerSeedHook, EpochBasedRunner,
                          Fp16OptimizerHook, OptimizerHook, build_optimizer,
                          build_runner)
@@ -20,7 +20,6 @@ def train_detector(model,
                    validate=False,
                    timestamp=None,
                    meta=None):
-
     cfg = compat_cfg(cfg)
     logger = get_root_logger(log_level=cfg.log_level)
 
@@ -62,7 +61,19 @@ def train_detector(model,
         model = build_dp(model, cfg.device, device_ids=cfg.gpu_ids)
 
     # build runner
-    optimizer = build_optimizer(model, cfg.optimizer)
+    parameters = []
+    for name, p in model.named_parameters():
+        print(name)
+        if 'roi_head.bbox_head.text_encoder' in name:
+            pass
+        else:
+            parameters.append(p)
+    # optimizer = torch.optim.SGD(
+    #     parameters, lr=cfg.optimizer['lr'], momentum=cfg.optimizer['momentum'],
+    #     weight_decay=cfg.optimizer['weight_decay']
+    # )
+
+    optimizer = build_optimizer(model, cfg.optimizer)  ###
 
     runner = build_runner(
         cfg.runner,
