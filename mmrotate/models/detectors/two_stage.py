@@ -6,6 +6,14 @@ import torch
 from ..builder import ROTATED_DETECTORS, build_backbone, build_head, build_neck
 from .base import RotatedBaseDetector
 
+from ..roi_heads.bbox_heads.clip import clip
+from loguru import logger
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+# clip_model_name = 'RN50'  ###
+
 
 @ROTATED_DETECTORS.register_module()
 class RotatedTwoStageDetector(RotatedBaseDetector):
@@ -29,10 +37,22 @@ class RotatedTwoStageDetector(RotatedBaseDetector):
             warnings.warn('DeprecationWarning: pretrained is deprecated, '
                           'please use "init_cfg" instead')
             backbone.pretrained = pretrained
-        self.backbone = build_backbone(backbone)
+
+        if backbone['type'] == 'Clip':
+            clip_model, _ = clip.load(backbone['clip_model_name'], device=device)
+            # clip_model.eval()
+            self.backbone = clip_model.visual
+            logger.success('backbone is use clip image encoder : {}'.format(backbone['clip_model_name']))
+        elif backbone['type'] == 'GeoRSClip':
+            pass
+        else:
+            self.backbone = build_backbone(backbone)
+            logger.success('backbone is use ' + backbone['type'])
+            # logger.error(self.backbone.parameters().device)
 
         if neck is not None:
             self.neck = build_neck(neck)
+            # logger.error(self.neck.parameters().device)
 
         if rpn_head is not None:
             rpn_train_cfg = train_cfg.rpn if train_cfg is not None else None
@@ -64,7 +84,7 @@ class RotatedTwoStageDetector(RotatedBaseDetector):
 
     def extract_feat(self, img):
         """Directly extract features from the backbone+neck."""
-        x = self.backbone(img)
+        x = self.backbone(img)  ### .half()
         if self.with_neck:
             x = self.neck(x)
         return x
@@ -80,11 +100,11 @@ class RotatedTwoStageDetector(RotatedBaseDetector):
         # rpn
         if self.with_rpn:
             rpn_outs = self.rpn_head(x)
-            outs = outs + (rpn_outs, )
+            outs = outs + (rpn_outs,)
         proposals = torch.randn(1000, 5).to(img.device)
         # roi_head
         roi_outs = self.roi_head.forward_dummy(x, proposals)
-        outs = outs + (roi_outs, )
+        outs = outs + (roi_outs,)
         return outs
 
     def forward_train(self,
