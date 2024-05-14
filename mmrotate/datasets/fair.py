@@ -29,22 +29,22 @@ class FairDataset(CustomDataset):
         version (str, optional): Angle representations. Defaults to 'oc'.
         difficulty (bool, optional): The difficulty threshold of GT.
     """
-    
+
     CLASSES = ('Boeing737', 'Boeing777', 'Boeing747', 'Boeing787', 'A321',
-    'A220', 'A330', 'A350', 'C919', 'ARJ21', 'other-airplane', 
-    'Passenger_Ship', 'Motorboat', 'Fishing_Boat', 'Tugboat', 'Engineering_Ship', 
-    'Liquid_Cargo_Ship', 'Dry_Cargo_Ship', 'Warship', 'other-ship', 'Small_Car', 'Bus', 'Cargo_Truck', 
-    'Dump_Truck', 'Van', 'Trailer', 'Tractor', 'Truck_Tractor', 'Excavator', 'other-vehicle',
-    'Baseball_Field', 'Basketball_Court', 'Football_Field', 'Tennis_Court', 'Roundabout', 'Intersection', 'Bridge')
-    
-    
+               'A220', 'A330', 'A350', 'C919', 'ARJ21', 'other-airplane',
+               'Passenger_Ship', 'Motorboat', 'Fishing_Boat', 'Tugboat', 'Engineering_Ship',
+               'Liquid_Cargo_Ship', 'Dry_Cargo_Ship', 'Warship', 'other-ship', 'Small_Car', 'Bus', 'Cargo_Truck',
+               'Dump_Truck', 'Van', 'Trailer', 'Tractor', 'Truck_Tractor', 'Excavator', 'other-vehicle',
+               'Baseball_Field', 'Basketball_Court', 'Football_Field', 'Tennis_Court', 'Roundabout', 'Intersection',
+               'Bridge')
+
     # CLASSES = ('Boeing_737', 'Boeing_777', 'Boeing747', 'Boeing_787', 'Airbus_A320', 
     # 'Airbus_A220', 'Airbus_A330', 'Airbus_A350', 'COMAC_C919', 'COMAC_ARJ21', 'other-airplane', 
     # 'Passenger_Ship', 'Motorboat', 'Fishing_Boat', 'Tugboat', 'Engineering_Ship', 
     # 'Liquid_Cargo_Ship', 'Dry_Cargo_Ship', 'Warship', 'other-ship', 'Small_Car', 'Bus', 'Cargo_Truck', 
     # 'Dump_Truck', 'Van', 'Trailer', 'Tractor', 'Truck_Tractor', 'Excavator', 'other-vehicle',
     # 'Baseball_Field', 'Basketball_Court', 'Football_Field', 'Tennis_Court', 'Roundabout', 'Intersection', 'Bridge')
-    
+
     # CLASSES = ('plane', 'baseball-diamond', 'bridge', 'ground-track-field',
     #            'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
     #            'basketball-court', 'storage-tank', 'soccer-ball-field',
@@ -61,9 +61,9 @@ class FairDataset(CustomDataset):
     PALETTE = [(165, 42, 42), (165, 42, 42), (165, 42, 42), (165, 42, 42),
                (165, 42, 42), (165, 42, 42), (165, 42, 42), (165, 42, 42),
                (165, 42, 42), (165, 42, 42), (165, 42, 42), (189, 183, 107),
-               (189, 183, 107), (189, 183, 107), (189, 183, 107), (189, 183, 107), (189, 183, 107), 
-               (189, 183, 107), (189, 183, 107), (189, 183, 107), (0, 255, 0), (0, 255, 0), 
-               (0, 255, 0), (0, 255, 0), (0, 255, 0), (0, 255, 0), (0, 255, 0), 
+               (189, 183, 107), (189, 183, 107), (189, 183, 107), (189, 183, 107), (189, 183, 107),
+               (189, 183, 107), (189, 183, 107), (189, 183, 107), (0, 255, 0), (0, 255, 0),
+               (0, 255, 0), (0, 255, 0), (0, 255, 0), (0, 255, 0), (0, 255, 0),
                (0, 255, 0), (0, 255, 0), (0, 255, 0), (255, 0, 0),
                (138, 43, 226), (255, 128, 0), (255, 0, 255), (0, 255, 255),
                (255, 193, 193), (0, 51, 153)]

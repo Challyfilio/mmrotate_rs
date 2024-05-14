@@ -2,14 +2,15 @@
 import glob
 import os
 import os.path as osp
+import random
 import re
 import tempfile
 import time
-import warnings
 import zipfile
 from collections import defaultdict
 from functools import partial
 
+import loguru
 import mmcv
 import numpy as np
 import torch
@@ -18,6 +19,8 @@ from mmdet.datasets.custom import CustomDataset
 
 from mmrotate.core import eval_rbbox_map, obb2poly_np, poly2obb_np
 from .builder import ROTATED_DATASETS
+
+few_shots = None  # None=full or Number 100,200,300,400,500
 
 
 @ROTATED_DATASETS.register_module()
@@ -34,6 +37,11 @@ class DOTADataset(CustomDataset):
                'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
                'basketball-court', 'storage-tank', 'soccer-ball-field',
                'roundabout', 'harbor', 'swimming-pool', 'helicopter')
+
+    # CLASSES = (
+    # 'S1', 'P1', 'T4', 'P3', 'B2', 'T3', 'P2', 'D1', 'C1', 'W1', 'H1', 'F1', 'S2', 'T2', 'S4', 'C3', 'A4', 'C2', 'B1',
+    # 'M4', 'T1', 'S3', 'M1', 'E1', 'T5', 'M3', 'L2', 'T6', 'M2', 'A2', 'E2', 'R2', 'A3', 'R3', 'A1', 'E3', 'R1', 'A5',
+    # 'L1')
 
     PALETTE = [(165, 42, 42), (189, 183, 107), (0, 255, 0), (255, 0, 0),
                (138, 43, 226), (255, 128, 0), (255, 0, 255), (0, 255, 255),
@@ -77,6 +85,7 @@ class DOTADataset(CustomDataset):
                 data_info['ann']['labels'] = []
                 data_infos.append(data_info)
         else:
+            random.shuffle(ann_files)  # challyfilio
             for ann_file in ann_files:
                 data_info = {}
                 img_id = osp.split(ann_file)[1][:-4]
@@ -142,6 +151,12 @@ class DOTADataset(CustomDataset):
                         (0, 8), dtype=np.float32)
 
                 data_infos.append(data_info)
+                if few_shots:
+                    if 'val' in ann_folder:
+                        pass
+                    else:
+                        if len(data_infos) == few_shots:  # challyfilio
+                            break
 
         self.img_ids = [*map(lambda x: x['filename'][:-4], data_infos)]
         return data_infos
@@ -219,37 +234,17 @@ class DOTADataset(CustomDataset):
         Args:
             results (list): Testing results of the dataset.
             nproc (int): number of process. Default: 4.
-
-        Returns:
-            list: merged results.
         """
-
-        def extract_xy(img_id):
-            """Extract x and y coordinates from image ID.
-
-            Args:
-                img_id (str): ID of the image.
-
-            Returns:
-                Tuple of two integers, the x and y coordinates.
-            """
-            pattern = re.compile(r'__(\d+)___(\d+)')
-            match = pattern.search(img_id)
-            if match:
-                x, y = int(match.group(1)), int(match.group(2))
-                return x, y
-            else:
-                warnings.warn(
-                    "Can't find coordinates in filename, "
-                    'the coordinates will be set to (0,0) by default.',
-                    category=Warning)
-                return 0, 0
-
         collector = defaultdict(list)
-        for idx, img_id in enumerate(self.img_ids):
+        for idx in range(len(self)):
             result = results[idx]
-            oriname = img_id.split('__', maxsplit=1)[0]
-            x, y = extract_xy(img_id)
+            img_id = self.img_ids[idx]
+            splitname = img_id.split('__')
+            oriname = splitname[0]
+            pattern1 = re.compile(r'__\d+___\d+')
+            x_y = re.findall(pattern1, img_id)
+            x_y_2 = re.findall(r'\d+', x_y[0])
+            x, y = int(x_y_2[0]), int(x_y_2[1])
             new_result = []
             for i, dets in enumerate(result):
                 bboxes, scores = dets[:, :-1], dets[:, [-1]]
@@ -259,20 +254,20 @@ class DOTADataset(CustomDataset):
                 labels = np.zeros((bboxes.shape[0], 1)) + i
                 new_result.append(
                     np.concatenate([labels, ori_bboxes, scores], axis=1))
+
             new_result = np.concatenate(new_result, axis=0)
             collector[oriname].append(new_result)
 
         merge_func = partial(_merge_func, CLASSES=self.CLASSES, iou_thr=0.1)
         if nproc <= 1:
-            print('Executing on Single Processor')
+            print('Single processing')
             merged_results = mmcv.track_iter_progress(
                 (map(merge_func, collector.items()), len(collector)))
         else:
-            print(f'Executing on {nproc} processors')
+            print('Multiple processing')
             merged_results = mmcv.track_parallel_progress(
                 merge_func, list(collector.items()), nproc)
 
-        # Return a zipped list of merged results
         return zip(*merged_results)
 
     def _results2submission(self, id_list, dets_list, out_folder=None):
