@@ -1,4 +1,6 @@
-# Copyright (c) OpenMMLab. All rights reserved.
+# Copyright (c) 2024 ✨Challyfilio✨
+# 2024/2/19
+# 检测头加原型特征
 import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule
@@ -9,9 +11,22 @@ from mmdet.models.utils import build_linear_layer
 from ...builder import ROTATED_HEADS
 from .rotated_bbox_head import RotatedBBoxHead
 
+from loguru import logger
+
+
+class PrototypeLayer(nn.Module):
+    def __init__(self, num_classes, feature_dim):
+        super(PrototypeLayer, self).__init__()
+        self.prototypes = nn.Parameter(torch.randn(num_classes, feature_dim))
+
+    def forward(self, x):
+        # Compute the distance from each input feature to each prototype
+        distances = (x.unsqueeze(1) - self.prototypes.unsqueeze(0)).norm(dim=2)
+        return distances
+
 
 @ROTATED_HEADS.register_module()
-class RotatedConvFCBBoxHead(RotatedBBoxHead):
+class PrototypeRotatedConvFCBBoxHead(RotatedBBoxHead):
     r"""More general bbox head, with shared conv and fc layers and two optional
     separated branches.
 
@@ -49,7 +64,7 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
                  init_cfg=None,
                  *args,
                  **kwargs):
-        super(RotatedConvFCBBoxHead, self).__init__(
+        super(PrototypeRotatedConvFCBBoxHead, self).__init__(
             *args, init_cfg=init_cfg, **kwargs)
         assert (num_shared_convs + num_shared_fcs + num_cls_convs +
                 num_cls_fcs + num_reg_convs + num_reg_fcs > 0)
@@ -124,6 +139,12 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
                     ])
             ]
 
+        # self.prototype_layers = PrototypeLayer(num_classes=16,feature_dim=self.fc_out_channels)
+        pt = torch.load('/workspace/pycharm_project/mmrotate/pretrain/prototype.pt')
+        self.prototypes = nn.Parameter(pt)
+
+        # self.prototypes = nn.Parameter(torch.zeros(16, self.fc_out_channels))
+
     def _add_conv_fc_branch(self,
                             num_branch_convs,
                             num_branch_fcs,
@@ -183,6 +204,8 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
         x_cls = x
         x_reg = x
 
+        aaa = x_cls @ self.prototypes.t()
+
         for conv in self.cls_convs:
             x_cls = conv(x_cls)
         if x_cls.dim() > 2:
@@ -203,15 +226,15 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
 
         cls_score = self.fc_cls(x_cls) if self.with_cls else None
         bbox_pred = self.fc_reg(x_reg) if self.with_reg else None
-        return cls_score, bbox_pred
+        return cls_score + aaa, bbox_pred
 
 
 @ROTATED_HEADS.register_module()
-class RotatedShared2FCBBoxHead(RotatedConvFCBBoxHead):
+class PrototypeRotatedShared2FCBBoxHead(PrototypeRotatedConvFCBBoxHead):
     """Shared2FC RBBox head."""
 
     def __init__(self, fc_out_channels=1024, *args, **kwargs):
-        super(RotatedShared2FCBBoxHead, self).__init__(
+        super(PrototypeRotatedShared2FCBBoxHead, self).__init__(
             num_shared_convs=0,
             num_shared_fcs=2,
             num_cls_convs=0,
@@ -224,11 +247,11 @@ class RotatedShared2FCBBoxHead(RotatedConvFCBBoxHead):
 
 
 @ROTATED_HEADS.register_module()
-class RotatedKFIoUShared2FCBBoxHead(RotatedConvFCBBoxHead):
+class PrototypeRotatedKFIoUShared2FCBBoxHead(PrototypeRotatedConvFCBBoxHead):
     """KFIoU RoI head."""
 
     def __init__(self, fc_out_channels=1024, *args, **kwargs):
-        super(RotatedKFIoUShared2FCBBoxHead, self).__init__(
+        super(PrototypeRotatedKFIoUShared2FCBBoxHead, self).__init__(
             num_shared_convs=0,
             num_shared_fcs=2,
             num_cls_convs=0,

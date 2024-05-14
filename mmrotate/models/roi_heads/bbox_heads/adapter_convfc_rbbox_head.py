@@ -1,4 +1,4 @@
-# Copyright (c) OpenMMLab. All rights reserved.
+# Copyright (c) 2023 ✨Challyfilio✨
 import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule
@@ -9,9 +9,59 @@ from mmdet.models.utils import build_linear_layer
 from ...builder import ROTATED_HEADS
 from .rotated_bbox_head import RotatedBBoxHead
 
+from loguru import logger
 
+
+class PoswiseFeedForwardNet_1(nn.Module):
+    def __init__(self, vis_dim):
+        super(PoswiseFeedForwardNet_1, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(vis_dim, vis_dim // 4, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(vis_dim // 4, vis_dim, bias=False))
+        # self.ln = nn.LayerNorm(d_model)
+
+    def forward(self, inputs):  # inputs: [batch_size, seq_len, d_model]
+        # residual = inputs
+        output = self.fc(inputs)
+        # output = self.ln(output)
+        return output  # [batch_size, seq_len, d_model]
+
+
+class PoswiseFeedForwardNet_2(nn.Module):
+    def __init__(self, vis_dim):
+        super(PoswiseFeedForwardNet_2, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(vis_dim, vis_dim // 4, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(vis_dim // 4, vis_dim, bias=False))
+        # self.ln = nn.LayerNorm(d_model)
+
+    def forward(self, inputs):  # inputs: [batch_size, seq_len, d_model]
+        # residual = inputs
+        output = self.fc(inputs)
+        # output = self.ln(output)
+        return output  # [batch_size, seq_len, d_model]
+
+
+# double fc
+class FCBD(nn.Module):
+    def __init__(self, vis_dim_1, vis_dim_2):
+        super(FCBD, self).__init__()
+        self.cls_feat_ffn = PoswiseFeedForwardNet_1(vis_dim_1)
+        self.reg_feat_ffn = PoswiseFeedForwardNet_2(vis_dim_2)
+
+    def forward(self, cls_feat, reg_feat):
+        self_cls_feat = self.cls_feat_ffn(cls_feat)
+        self_reg_feat = self.reg_feat_ffn(reg_feat)
+        cls_feat = cls_feat + self_cls_feat
+        reg_feat = reg_feat + self_reg_feat
+        return cls_feat, reg_feat
+
+
+# Adapter
 @ROTATED_HEADS.register_module()
-class RotatedConvFCBBoxHead(RotatedBBoxHead):
+class AdapterRotatedConvFCBBoxHead(RotatedBBoxHead):
     r"""More general bbox head, with shared conv and fc layers and two optional
     separated branches.
 
@@ -49,7 +99,7 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
                  init_cfg=None,
                  *args,
                  **kwargs):
-        super(RotatedConvFCBBoxHead, self).__init__(
+        super(AdapterRotatedConvFCBBoxHead, self).__init__(
             *args, init_cfg=init_cfg, **kwargs)
         assert (num_shared_convs + num_shared_fcs + num_cls_convs +
                 num_cls_fcs + num_reg_convs + num_reg_fcs > 0)
@@ -71,29 +121,38 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
         self.norm_cfg = norm_cfg
 
         # add shared convs and fcs
-        self.shared_convs, self.shared_fcs, last_layer_dim = \
-            self._add_conv_fc_branch(
-                self.num_shared_convs, self.num_shared_fcs, self.in_channels,
-                True)
-        self.shared_out_channels = last_layer_dim
+        # self.shared_convs, self.shared_fcs, last_layer_dim = \
+        #     self._add_conv_fc_branch(
+        #         self.num_shared_convs, 1, self.in_channels,
+        #         True)
+        last_layer_dim = self.in_channels * self.roi_feat_area
+        self.adapter_in_channels = last_layer_dim
+
+        self.fc = nn.Linear(self.adapter_in_channels, self.fc_out_channels)
+        # self.shared_out_channels = last_layer_dim
 
         # add cls specific branch
-        self.cls_convs, self.cls_fcs, self.cls_last_dim = \
-            self._add_conv_fc_branch(
-                self.num_cls_convs, self.num_cls_fcs, self.shared_out_channels)
+        # self.cls_last_dim --> self.shared_out_channels
+        # self.cls_convs, self.cls_fcs, self.cls_last_dim = \
+        #     self._add_conv_fc_branch(
+        #         self.num_cls_convs, self.num_cls_fcs, self.shared_out_channels)
 
         # add reg specific branch
-        self.reg_convs, self.reg_fcs, self.reg_last_dim = \
-            self._add_conv_fc_branch(
-                self.num_reg_convs, self.num_reg_fcs, self.shared_out_channels)
+        # self.reg_last_dim --> self.shared_out_channels
+        # self.reg_convs, self.reg_fcs, self.reg_last_dim = \
+        #     self._add_conv_fc_branch(
+        #         self.num_reg_convs, self.num_reg_fcs, self.shared_out_channels)
 
-        if self.num_shared_fcs == 0 and not self.with_avg_pool:
-            if self.num_cls_fcs == 0:
-                self.cls_last_dim *= self.roi_feat_area
-            if self.num_reg_fcs == 0:
-                self.reg_last_dim *= self.roi_feat_area
+        # if self.num_shared_fcs == 0 and not self.with_avg_pool:
+        #     if self.num_cls_fcs == 0:
+        #         self.cls_last_dim *= self.roi_feat_area
+        #     if self.num_reg_fcs == 0:
+        #         self.reg_last_dim *= self.roi_feat_area
 
         self.relu = nn.ReLU(inplace=True)
+
+        self.adapter = FCBD(self.fc_out_channels, self.fc_out_channels)
+
         # reconstruct fc_cls and fc_reg since input channels are changed
         if self.with_cls:
             if self.custom_cls_channels:
@@ -102,27 +161,29 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
                 cls_channels = self.num_classes + 1
             self.fc_cls = build_linear_layer(
                 self.cls_predictor_cfg,
-                in_features=self.cls_last_dim,
+                # self.cls_last_dim --> self.fc_out_channels
+                in_features=self.fc_out_channels,
                 out_features=cls_channels)
         if self.with_reg:
             out_dim_reg = (5 if self.reg_class_agnostic else 5 *
                                                              self.num_classes)
             self.fc_reg = build_linear_layer(
                 self.reg_predictor_cfg,
-                in_features=self.reg_last_dim,
+                # self.reg_last_dim --> self.fc_out_channels
+                in_features=self.fc_out_channels,
                 out_features=out_dim_reg)
 
-        if init_cfg is None:
-            self.init_cfg += [
-                dict(
-                    type='Xavier',
-                    layer='Linear',
-                    override=[
-                        dict(name='shared_fcs'),
-                        dict(name='cls_fcs'),
-                        dict(name='reg_fcs')
-                    ])
-            ]
+        # if init_cfg is None:
+        #     self.init_cfg += [
+        #         dict(
+        #             type='Xavier',
+        #             layer='Linear',
+        #             override=[
+        #                 dict(name='shared_fcs'),
+        #                 dict(name='cls_fcs'),
+        #                 dict(name='reg_fcs')
+        #             ])
+        #     ]
 
     def _add_conv_fc_branch(self,
                             num_branch_convs,
@@ -167,39 +228,56 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
 
     def forward(self, x):
         """Forward function."""
-        if self.num_shared_convs > 0:
-            for conv in self.shared_convs:
-                x = conv(x)
+        # logger.error(self.num_shared_convs)
+        # if self.num_shared_convs > 0:
+        #     for conv in self.shared_convs:
+        #         x = conv(x)
+        # logger.debug(x.shape)
 
-        if self.num_shared_fcs > 0:
-            if self.with_avg_pool:
-                x = self.avg_pool(x)
+        # logger.error(self.num_shared_fcs)
+        # if self.num_shared_fcs > 0:
+        #     if self.with_avg_pool:
+        #         logger.error('avg_pool')
+        #         x = self.avg_pool(x)
+        #
+        #     x = x.flatten(1)
+        #     logger.error(x.shape)
+        #
+        #     for fc in self.shared_fcs:
+        #         x = self.relu(fc(x))
+        # logger.debug(x.shape)
 
-            x = x.flatten(1)
+        # ---------------------------------
+        x = x.flatten(1)
+        x = self.relu(self.fc(x))
+        # ---------------------------------
 
-            for fc in self.shared_fcs:
-                x = self.relu(fc(x))
         # separate branches
         x_cls = x
         x_reg = x
+        # logger.debug(x.shape)
 
-        for conv in self.cls_convs:
-            x_cls = conv(x_cls)
-        if x_cls.dim() > 2:
-            if self.with_avg_pool:
-                x_cls = self.avg_pool(x_cls)
-            x_cls = x_cls.flatten(1)
-        for fc in self.cls_fcs:
-            x_cls = self.relu(fc(x_cls))
+        # for conv in self.cls_convs:
+        #     x_cls = conv(x_cls)
+        # if x_cls.dim() > 2:
+        #     if self.with_avg_pool:
+        #         x_cls = self.avg_pool(x_cls)
+        #     x_cls = x_cls.flatten(1)
+        # for fc in self.cls_fcs:
+        #     x_cls = self.relu(fc(x_cls))
+        #
+        # for conv in self.reg_convs:
+        #     x_reg = conv(x_reg)
+        # if x_reg.dim() > 2:
+        #     if self.with_avg_pool:
+        #         x_reg = self.avg_pool(x_reg)
+        #     x_reg = x_reg.flatten(1)
+        # for fc in self.reg_fcs:
+        #     x_reg = self.relu(fc(x_reg))
 
-        for conv in self.reg_convs:
-            x_reg = conv(x_reg)
-        if x_reg.dim() > 2:
-            if self.with_avg_pool:
-                x_reg = self.avg_pool(x_reg)
-            x_reg = x_reg.flatten(1)
-        for fc in self.reg_fcs:
-            x_reg = self.relu(fc(x_reg))
+        x_cls, x_reg = self.adapter(x_cls, x_reg)
+        # logger.debug(x_cls.shape)  # 1024,1024
+        # logger.debug(x_reg.shape)  # 1024,1024
 
         cls_score = self.fc_cls(x_cls) if self.with_cls else None
         bbox_pred = self.fc_reg(x_reg) if self.with_reg else None
@@ -207,11 +285,11 @@ class RotatedConvFCBBoxHead(RotatedBBoxHead):
 
 
 @ROTATED_HEADS.register_module()
-class RotatedShared2FCBBoxHead(RotatedConvFCBBoxHead):
+class AdapterRotatedShared2FCBBoxHead(AdapterRotatedConvFCBBoxHead):
     """Shared2FC RBBox head."""
 
     def __init__(self, fc_out_channels=1024, *args, **kwargs):
-        super(RotatedShared2FCBBoxHead, self).__init__(
+        super(AdapterRotatedShared2FCBBoxHead, self).__init__(
             num_shared_convs=0,
             num_shared_fcs=2,
             num_cls_convs=0,
@@ -224,11 +302,11 @@ class RotatedShared2FCBBoxHead(RotatedConvFCBBoxHead):
 
 
 @ROTATED_HEADS.register_module()
-class RotatedKFIoUShared2FCBBoxHead(RotatedConvFCBBoxHead):
+class AdapterRotatedKFIoUShared2FCBBoxHead(AdapterRotatedConvFCBBoxHead):
     """KFIoU RoI head."""
 
     def __init__(self, fc_out_channels=1024, *args, **kwargs):
-        super(RotatedKFIoUShared2FCBBoxHead, self).__init__(
+        super(AdapterRotatedKFIoUShared2FCBBoxHead, self).__init__(
             num_shared_convs=0,
             num_shared_fcs=2,
             num_cls_convs=0,
