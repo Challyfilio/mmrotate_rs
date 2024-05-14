@@ -36,6 +36,10 @@ def smooth_focal_loss(pred,
 
     pred_sigmoid = pred.sigmoid()
     target = target.type_as(pred)
+    # target = target.unsqueeze(1)
+    # target = target.repeat(1, 99)
+    # print(pred_sigmoid.shape)
+    # print(target.shape)
     pt = (1 - pred_sigmoid) * target + pred_sigmoid * (1 - target)
     focal_weight = (alpha * target + (1 - alpha) *
                     (1 - target)) * pt.pow(gamma)
