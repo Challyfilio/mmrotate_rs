@@ -4,7 +4,7 @@
 
 比赛链接：[基于亚米级影像的精细化目标检测 竞赛 - DataFountain](https://www.datafountain.cn/competitions/637)
 
-同时也为毕业设计所使用框架。🥳🥳
+同时也为毕业设计所使用框架。毕业啦！🥳🥳
 
 ---
 
@@ -28,7 +28,7 @@
 
 ---
 
-This project is base on [open-mmlab/mmrotate](https://github.com/open-mmlab/mmrotate). The relevant experimental code will be made public after the article is accepted.
+This project is base on [open-mmlab/mmrotate](https://github.com/open-mmlab/mmrotate).
 
 ## How to use
 
